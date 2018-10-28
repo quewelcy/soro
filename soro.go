@@ -1,62 +1,126 @@
-package soro
+package main
 
 import (
+	"bufio"
 	"bytes"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/user"
 	"strings"
 )
 
-var root = ""
+var homeDir string
+
+var rootPath = ""
 var htmlPath = "/"
-var thumbStorage = getHomeDir() + string(os.PathSeparator) + ".soroThumbs"
+var resPath = ""
+var thumbsPath = ""
 
-//StartWeb starts web https://localhost:443
-func StartWeb() {
-	if len(os.Args) < 2 {
-		log.Println("No root path provided")
-		return
+func main() {
+	props := readConf()
+	switch props["method"] {
+	case "web":
+		startWeb(props["port"], props["root"], props["thumbs"], props["resources"], props["cert"], props["key"])
+	case "thumbs":
+		startThumbMaker(props["root"], props["thumbs"])
 	}
+}
 
-	root = os.Args[1]
+func readConf() map[string]string {
+	if len(os.Args) == 1 {
+		log.Fatal("No config provided")
+	}
+	configPath := os.Args[1]
+	if configPath == "" {
+		log.Fatal("Config path is empty")
+	}
+	configPath = resolveFullPath(configPath)
+	log.Println("Config path is", configPath)
+
+	file, err := os.Open(configPath)
+	if err != nil {
+		log.Fatal("No config file found")
+	}
+	props := make(map[string]string)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		prop := strings.TrimSpace(scanner.Text())
+		if prop == "" || prop[0] == '#' {
+			continue
+		}
+		kv := strings.Split(prop, "=")
+		props[kv[0]] = resolveFullPath(kv[1])
+	}
+	return props
+}
+
+func resolveFullPath(path string) string {
+	if strings.HasPrefix(path, "~") {
+		return getHomeDir() + path[1:]
+	}
+	return path
+}
+
+func getHomeDir() string {
+	if homeDir == "" {
+		usr, _ := user.Current()
+		homeDir = usr.HomeDir
+	}
+	return homeDir
+}
+
+func startWeb(port, root, thumbs, res, certPath, keyPath string) {
+	if port == "" {
+		log.Fatal("Port is not set")
+	}
 	if root == "" {
-		log.Println("Root path is empty")
-		return
+		log.Fatal("Root path is not set")
 	}
-	log.Println("Root path is", root)
+	if thumbs == "" {
+		log.Fatal("Thumb storage path is not set")
+	}
+	rootPath = root
+	thumbsPath = thumbs
+	resPath = res
+	log.Println("Root path is", rootPath)
 
-	//todo differ these functions
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(resPath+"/public"))))
+	http.HandleFunc("/file/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, r.FormValue("p"))
+	})
+	http.HandleFunc("/thumb/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, getFullPath(thumbsPath, r.FormValue("p")))
+	})
+	http.HandleFunc("/", rootHandler)
 
-	if len(os.Args) > 2 {
-		thumb := os.Args[2]
-		if thumb == "thumb" {
-			makeThumbs()
-		}
+	var err error
+	if certPath != "" && keyPath != "" {
+		err = http.ListenAndServeTLS(port, certPath, keyPath, nil)
 	} else {
-		http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../res/public"))))
-		http.HandleFunc("/file/", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, r.FormValue("p"))
-		})
-		http.HandleFunc("/thumb/", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, getFullPath(thumbStorage, r.FormValue("p")))
-		})
-		http.HandleFunc("/", rootHandler)
-		err := http.ListenAndServeTLS(":443", "soro-cert.pem", "soro-key.pem", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err = http.ListenAndServe(port, nil)
 	}
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func haveAccess(r *http.Request) bool {
+	hash := r.Header.Get("hash")
+	if hash == "good" {
+		return true
+	}
+	return false
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	dirPath := r.FormValue("p")
 	contentPath := r.FormValue("c")
-	tmplTitle, _ := template.ParseFiles("../res/template/title.tm")
-	tmplfileRow, _ := template.ParseFiles("../res/template/fileRow.tm")
-	tmplfileDownload, _ := template.ParseFiles("../res/template/fileDownload.tm")
+	tmplTitle, _ := template.ParseFiles(resPath + "/template/title.tm")
+	tmplfileRow, _ := template.ParseFiles(resPath + "/template/fileRow.tm")
+	tmplfileDownload, _ := template.ParseFiles(resPath + "/template/fileDownload.tm")
 
 	contentTitle := ""
 	contentClass := "preview-outer-"
@@ -81,9 +145,9 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	tmplTitle.Execute(w, data)
 }
 
-func readDir(path, contentPath string, tmplFileRow, tmplfileDownload *template.Template) string {
+func readDir(path, contentPath string, tmplFileRow, tmplFileDownload *template.Template) string {
 	if path == "" {
-		path = root
+		path = rootPath
 	}
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -92,7 +156,7 @@ func readDir(path, contentPath string, tmplFileRow, tmplfileDownload *template.T
 
 	var b bytes.Buffer // todo reuse single bytes buffer
 
-	if path != root {
+	if path != rootPath {
 		data := map[string]interface{}{
 			"class":    "",
 			"href":     htmlPath + "?p=" + getUpperDir(path),
@@ -125,7 +189,7 @@ func readDir(path, contentPath string, tmplFileRow, tmplfileDownload *template.T
 		}
 
 		if addDownload {
-			downloadLink = getDownloadLink(filePath, tmplfileDownload)
+			downloadLink = getDownloadLink(filePath, tmplFileDownload)
 		}
 		data := map[string]interface{}{
 			"class":    class,
@@ -154,7 +218,7 @@ func skipInList(fname string) bool {
 
 func readDirThumbs(path string) string {
 	if path == "" {
-		path = root
+		path = rootPath
 	}
 	files, err := ioutil.ReadDir(path)
 	if err != nil {

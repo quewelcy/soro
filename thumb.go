@@ -1,4 +1,4 @@
-package soro
+package main
 
 import (
 	"image"
@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"os/user"
 	"strconv"
 
 	"github.com/nfnt/resize"
@@ -19,20 +18,12 @@ const (
 	thumbWidth  = int(thumbHeight * 1.75)
 )
 
-func getHomeDir() string {
-	usr, err := user.Current()
-	if err != nil {
-		log.Fatal("Can't get home dir", err)
-	}
-	return usr.HomeDir
-}
-
-func makeThumbs() {
-	err := os.MkdirAll(thumbStorage, os.ModeDir)
+func startThumbMaker(rootPath, storagePath string) {
+	err := os.MkdirAll(storagePath, 0700) // bug permission denied
 	if err != nil {
 		log.Println(err)
 	}
-	makeThumbsOfPath(root, thumbStorage)
+	makeThumbsOfPath(rootPath, storagePath)
 }
 
 func makeThumbsOfPath(rootPath, storagePath string) {

@@ -1,4 +1,4 @@
-package soro
+package main
 
 import (
 	"bytes"
@@ -51,7 +51,7 @@ func getImageContent(path string) string {
 		"previewHeight": previewHeight,
 	}
 	var b bytes.Buffer
-	tmpl, _ := template.ParseFiles("../res/template/img.tm")
+	tmpl, _ := template.ParseFiles(resPath + "/template/img.tm")
 	tmpl.Execute(&b, data)
 	return b.String()
 }
@@ -66,7 +66,7 @@ func hasSuffix(suffixes []string, path string) bool {
 }
 
 func getThumbTag(b *bytes.Buffer, thumbName, dirPath, imgPath, class string) {
-	tmplThumb, _ := template.ParseFiles("../res/template/thumb.tm")
+	tmplThumb, _ := template.ParseFiles(resPath + "/template/thumb.tm")
 	data := map[string]interface{}{
 		"dirPath":   dirPath,
 		"imgPath":   imgPath,

@@ -1,4 +1,4 @@
-package soro
+package main
 
 import "strings"
 

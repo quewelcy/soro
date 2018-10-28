@@ -15,4 +15,15 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pe
 
 # Run configs
 
-//todo
+Run soro this way
+go run github.com/quewelcy/soro ~/gosrc/src/github.com/quewelcy/soro/conf.properties
+
+conf.properties is in root
+ 
+method=web|thumbs              // could be *web* to run web, or *thumbs* to run thumb maker
+port=:8081                     // port for web
+root=/home/you/files           // root folder for file dump
+thumbs=/home/you/.soroThumbs   // folder with thumbs
+cert=/home/you/soro-cert.pem   // cert file for https
+key=/home/you/soro-key.pem     // key file for https
+resources=/home/you/soro/res   // path to program resources like templates and static for web
