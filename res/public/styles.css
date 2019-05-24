@@ -139,7 +139,7 @@ a:hover {
 .preview-content {
     padding: 10px;
     background: whitesmoke;
-    text-align: center;
+    text-align: left;
 }
 
 .preview-content img {

@@ -42,7 +42,7 @@ func readConf() map[string]string {
 
 	file, err := os.Open(configPath)
 	if err != nil {
-		log.Fatal("No config file found")
+		log.Fatal(err)
 	}
 	props := make(map[string]string)
 	scanner := bufio.NewScanner(file)
@@ -86,6 +86,8 @@ func startWeb(port, root, thumbs, res, certPath, keyPath string) {
 	thumbsPath = thumbs
 	resPath = res
 	log.Println("Root path is", rootPath)
+	log.Println("Thumbs path is", thumbsPath)
+	log.Println("Res path is", resPath)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(resPath+"/public"))))
 	http.HandleFunc("/file/", func(w http.ResponseWriter, r *http.Request) {
@@ -98,8 +100,10 @@ func startWeb(port, root, thumbs, res, certPath, keyPath string) {
 
 	var err error
 	if certPath != "" && keyPath != "" {
+		log.Printf("Listening to https://localhost%s", port)
 		err = http.ListenAndServeTLS(port, certPath, keyPath, nil)
 	} else {
+		log.Printf("Listening to http://localhost%s", port)
 		err = http.ListenAndServe(port, nil)
 	}
 	if err != nil {
@@ -146,6 +150,8 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func readDir(path, contentPath string, tmplFileRow, tmplFileDownload *template.Template) string {
+	log.Println("read dir", path, contentPath, tmplFileRow, tmplFileDownload)
+
 	if path == "" {
 		path = rootPath
 	}
